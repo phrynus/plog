@@ -20,7 +20,7 @@ go get github.com/phrynus/plog
 ## 快速开始
 
 ```go
-package main
+package plog
 
 import "github.com/phrynus/plog"
 
