@@ -15,26 +15,26 @@ import (
 	"time"
 )
 
-// level 表示日志级别。
-type level uint8
+// Level 表示日志级别。
+type Level uint8
 
 const (
-	levelDebug level = iota // 调试信息
-	levelInfo               // 正常运行信息
-	levelWarn               // 警告，不影响运行
-	levelError              // 错误，需要关注
-	levelNone               // 用于关闭输出
+	LevelDebug Level = iota // 调试信息
+	LevelInfo               // 正常运行信息
+	LevelWarn               // 警告，不影响运行
+	LevelError              // 错误，需要关注
+	LevelNone               // 用于关闭输出
 )
 
-// levelNames 级别名称表，包级常量避免每次调用重新分配。
-var levelNames = [...]string{"DEBUG", "INFO", "WARN", "ERROR", "NONE"}
+// LevelNames 级别名称表，包级常量避免每次调用重新分配。
+var LevelNames = [...]string{"DEBUG", "INFO", "WARN", "ERROR", "NONE"}
 
 // String 返回级别名称，兼容 fmt.Stringer。
-func (lvl level) String() string {
-	if lvl > levelNone {
+func (lvl Level) String() string {
+	if lvl > LevelNone {
 		return "UNKNOWN"
 	}
-	return levelNames[lvl]
+	return LevelNames[lvl]
 }
 
 // Config 是日志器的配置，所有字段均可选（Filename 除外）。
@@ -46,10 +46,10 @@ type Config struct {
 	MaxSize int64
 
 	// MinLevel 最低记录级别，低于此级别的日志会被丢弃，默认 DEBUG。
-	MinLevel level
+	MinLevel Level
 
 	// StdoutLevel 同时输出到控制台的最低级别，NONE 表示不输出到控制台，默认 INFO。
-	StdoutLevel level
+	StdoutLevel Level
 
 	// Color 控制台是否启用 ANSI 彩色输出，默认 true。
 	Color bool
@@ -99,7 +99,7 @@ type Log struct {
 
 // logEntry 是一条待写入的日志条目。
 type logEntry struct {
-	level level
+	Level Level
 	msg   string
 	file  string // 调用文件名（不含路径）
 	line  int    // 调用行号
@@ -122,7 +122,7 @@ func New(cfg Config) (*Log, error) {
 		cfg.MaxSize = 50 << 20 // 50MB
 	}
 	if cfg.StdoutLevel == 0 {
-		cfg.StdoutLevel = levelInfo
+		cfg.StdoutLevel = LevelInfo
 	}
 	if !cfg.Color {
 		cfg.Color = true
@@ -170,28 +170,28 @@ func New(cfg Config) (*Log, error) {
 // ──────────────────────────── 公开方法 ────────────────────────────
 
 // Debug 记录 DEBUG 级别日志。
-func (l *Log) Debug(args ...any) { l.log(levelDebug, "", args...) }
+func (l *Log) Debug(args ...any) { l.log(LevelDebug, "", args...) }
 
 // Debugf 记录 DEBUG 级别格式化日志。
-func (l *Log) Debugf(format string, args ...any) { l.log(levelDebug, format, args...) }
+func (l *Log) Debugf(format string, args ...any) { l.log(LevelDebug, format, args...) }
 
 // Info 记录 INFO 级别日志。
-func (l *Log) Info(args ...any) { l.log(levelInfo, "", args...) }
+func (l *Log) Info(args ...any) { l.log(LevelInfo, "", args...) }
 
 // Infof 记录 INFO 级别格式化日志。
-func (l *Log) Infof(format string, args ...any) { l.log(levelInfo, format, args...) }
+func (l *Log) Infof(format string, args ...any) { l.log(LevelInfo, format, args...) }
 
 // Warn 记录 WARN 级别日志。
-func (l *Log) Warn(args ...any) { l.log(levelWarn, "", args...) }
+func (l *Log) Warn(args ...any) { l.log(LevelWarn, "", args...) }
 
 // Warnf 记录 WARN 级别格式化日志。
-func (l *Log) Warnf(format string, args ...any) { l.log(levelWarn, format, args...) }
+func (l *Log) Warnf(format string, args ...any) { l.log(LevelWarn, format, args...) }
 
 // Error 记录 ERROR 级别日志。
-func (l *Log) Error(args ...any) { l.log(levelError, "", args...) }
+func (l *Log) Error(args ...any) { l.log(LevelError, "", args...) }
 
 // Errorf 记录 ERROR 级别格式化日志。
-func (l *Log) Errorf(format string, args ...any) { l.log(levelError, format, args...) }
+func (l *Log) Errorf(format string, args ...any) { l.log(LevelError, format, args...) }
 
 // Flush 强制将缓冲区内容写入磁盘。同步模式可直接调用；
 // 异步模式会触发后台刷新（不保证调用返回时已完成落盘）。
@@ -261,15 +261,16 @@ func stdInit() *Log {
 	stdOnce.Do(func() {
 		var err error
 		std, err = New(Config{
-			Filename:    "app.log",
-			MaxSize:     50 << 10, // 50MB
-			MinLevel:    levelDebug,
-			StdoutLevel: levelInfo,
-			Color:       true,
-			FileLine:    true,
-			Tag:         "MAIN",
-			Compress:    true,
-			MaxBackups:  5,
+			Filename:    "app.log",  // 日志文件路径（必填）
+			MaxSize:     50 << 20,   // 单个文件最大 50MB，超过自动轮转
+			MinLevel:    LevelDebug, // 最低记录级别 Debug
+			StdoutLevel: 1,          // 控制台输出最低级别 Info
+			Color:       true,       // 控制台 ANSI 彩色
+			FileLine:    true,       // 记录调用位置 file:line
+			Tag:         "MAIN",     // 日志标识符
+			BufferSize:  4096,       // 异步缓冲大小
+			Compress:    true,       // 轮转后 gzip 压缩
+			MaxBackups:  5,          // 保留的压缩备份数
 		})
 		if err != nil {
 			panic("log: default init failed: " + err.Error())
@@ -289,28 +290,28 @@ func SetDefault(cfg Config) {
 }
 
 // Debug 包级快捷函数，自动使用默认日志器（懒加载，零配置）。
-func Debug(args ...any) { stdInit().log(levelDebug, "", args...) }
+func Debug(args ...any) { stdInit().log(LevelDebug, "", args...) }
 
 // Debugf 包级快捷函数。
-func Debugf(format string, args ...any) { stdInit().log(levelDebug, format, args...) }
+func Debugf(format string, args ...any) { stdInit().log(LevelDebug, format, args...) }
 
 // Info 包级快捷函数。
-func Info(args ...any) { stdInit().log(levelInfo, "", args...) }
+func Info(args ...any) { stdInit().log(LevelInfo, "", args...) }
 
 // Infof 包级快捷函数。
-func Infof(format string, args ...any) { stdInit().log(levelInfo, format, args...) }
+func Infof(format string, args ...any) { stdInit().log(LevelInfo, format, args...) }
 
 // Warn 包级快捷函数。
-func Warn(args ...any) { stdInit().log(levelWarn, "", args...) }
+func Warn(args ...any) { stdInit().log(LevelWarn, "", args...) }
 
 // Warnf 包级快捷函数。
-func Warnf(format string, args ...any) { stdInit().log(levelWarn, format, args...) }
+func Warnf(format string, args ...any) { stdInit().log(LevelWarn, format, args...) }
 
 // Error 包级快捷函数。
-func Error(args ...any) { stdInit().log(levelError, "", args...) }
+func Error(args ...any) { stdInit().log(LevelError, "", args...) }
 
 // Errorf 包级快捷函数。
-func Errorf(format string, args ...any) { stdInit().log(levelError, format, args...) }
+func Errorf(format string, args ...any) { stdInit().log(LevelError, format, args...) }
 
 // Close 关闭默认日志器。
 func Close() {
@@ -364,7 +365,7 @@ func (l *Log) process(e *logEntry) {
 	l.buf.WriteByte('\n')
 
 	// 控制台输出
-	if e.level >= l.cfg.StdoutLevel && l.cfg.StdoutLevel != levelNone {
+	if e.Level >= l.cfg.StdoutLevel && l.cfg.StdoutLevel != LevelNone {
 		l.writeConsole(e)
 	}
 
@@ -374,7 +375,7 @@ func (l *Log) process(e *logEntry) {
 	}
 }
 
-// formatTo 将一条日志格式化为 [TAG][2006/01/02 15:04:05.000][LEVEL] file:line message 写入 buf（不含换行）。
+// formatTo 将一条日志格式化为 [TAG][2006/01/02 15:04:05.000][Level] file:line message 写入 buf（不含换行）。
 func (l *Log) formatTo(b *bytes.Buffer, e *logEntry) {
 	b.Grow(128)
 
@@ -383,7 +384,7 @@ func (l *Log) formatTo(b *bytes.Buffer, e *logEntry) {
 	b.WriteString("][")
 	appendTime(b, e.ts, true)
 	b.WriteString("][")
-	b.WriteString(levelNames[e.level])
+	b.WriteString(LevelNames[e.Level])
 	b.WriteByte(']')
 	if e.file != "" {
 		b.WriteByte(' ')
@@ -459,7 +460,7 @@ func (l *Log) writeConsole(e *logEntry) {
 		b.WriteString("][")
 		appendTime(b, e.ts, false)
 		b.WriteString("][")
-		b.WriteString(levelNames[e.level])
+		b.WriteString(LevelNames[e.Level])
 		b.WriteByte(']')
 		if e.file != "" {
 			b.WriteByte(' ')
@@ -474,7 +475,7 @@ func (l *Log) writeConsole(e *logEntry) {
 		return
 	}
 
-	// 彩色模式：[TAG][time][LEVEL] file:line message
+	// 彩色模式：[TAG][time][Level] file:line message
 	appendAnsi(b, 0, cWhite)
 	b.WriteByte('[')
 	b.WriteString(e.tag)
@@ -488,19 +489,19 @@ func (l *Log) writeConsole(e *logEntry) {
 	b.WriteString(ansiReset)
 
 	var bg int
-	switch e.level {
-	case levelDebug:
+	switch e.Level {
+	case LevelDebug:
 		bg = cBgBlue
-	case levelInfo:
+	case LevelInfo:
 		bg = cBgGreen
-	case levelWarn:
+	case LevelWarn:
 		bg = cBgOrange
-	case levelError:
+	case LevelError:
 		bg = cBgRed
 	}
 	appendAnsi(b, bg, cWhite)
 	b.WriteByte('[')
-	b.WriteString(levelNames[e.level])
+	b.WriteString(LevelNames[e.Level])
 	b.WriteByte(']')
 	b.WriteString(ansiReset)
 
@@ -660,8 +661,8 @@ func (l *Log) sendEntry(e *logEntry) {
 }
 
 // log 是核心日志记录入口。
-func (l *Log) log(level level, format string, args ...any) {
-	if level < l.cfg.MinLevel {
+func (l *Log) log(Level Level, format string, args ...any) {
+	if Level < l.cfg.MinLevel {
 		return
 	}
 	if atomic.LoadInt32(&l.closed) == 1 {
@@ -675,7 +676,7 @@ func (l *Log) log(level level, format string, args ...any) {
 	}
 
 	entry := l.pool.Get().(*logEntry)
-	entry.level = level
+	entry.Level = Level
 	entry.msg = msg
 	entry.file = ""
 	entry.line = 0

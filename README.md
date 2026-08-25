@@ -31,22 +31,58 @@ func main() {
 }
 ```
 
+## 默认配置
+
+使用包级快捷函数前，可用 `SetDefault` 自定义默认日志器（必须在首次调用前设置，推荐放在 `init()` 中）。
+
+```go
+func init() {
+	plog.SetDefault(plog.Config{
+		Filename:    "app.log",       // 日志文件路径（必填）
+		MaxSize:     50 << 20,        // 单个文件最大 50MB，超过自动轮转
+		MinLevel:    plog.LevelDebug, // 最低记录级别 Debug
+		StdoutLevel: 1,               // 控制台输出最低级别 Info
+		Color:       true,            // 控制台 ANSI 彩色
+		FileLine:    true,            // 记录调用位置 file:line
+		Tag:         "MAIN",          // 日志标识符
+		BufferSize:  4096,            // 异步缓冲大小
+		Compress:    true,            // 轮转后 gzip 压缩
+		MaxBackups:  5,               // 保留的压缩备份数
+	})
+}
+```
+
 ## 自定义配置
 
 ```go
 l, _ := plog.New(plog.Config{
-	Filename:    "app.log",
-	MinLevel:    plog.Info,
-	StdoutLevel: plog.Debug,
-	Color:       true,
-	FileLine:    true,
-	MaxSize:     50 << 20, // 50MB
-	Compress:    true,
-	MaxBackups:  5,
+	Filename:    "app.log",       // 日志文件路径（必填）
+	MaxSize:     50 << 20,        // 单个文件最大 50MB，超过自动轮转
+	MinLevel:    plog.LevelDebug, // 最低记录级别 Debug
+	StdoutLevel: 1,               // 控制台输出最低级别 Info
+	Color:       true,            // 控制台 ANSI 彩色
+	FileLine:    true,            // 记录调用位置 file:line
+	Tag:         "MAIN",          // 日志标识符
+	BufferSize:  4096,            // 异步缓冲大小
+	Compress:    true,            // 轮转后 gzip 压缩
+	MaxBackups:  5,               // 保留的压缩备份数
 })
 defer l.Close()
 l.Error("something went wrong")
 ```
+
+| 字段          | 默认值  | 说明                                  |
+| ------------- | ------- | ------------------------------------- |
+| `Filename`    | —       | 日志文件路径（必填），目录自动创建    |
+| `MaxSize`     | 50MB    | 单个文件超过后自动轮转                |
+| `MinLevel`    | `DEBUG` | 低于该级别的日志被丢弃                |
+| `StdoutLevel` | `INFO`  | 控制台输出最低级别，`NONE` 关闭控制台 |
+| `Color`       | `true`  | 控制台 ANSI 彩色输出                  |
+| `FileLine`    | `true`  | 在日志中记录调用位置                  |
+| `Tag`         | `MAIN`  | 日志标识符，出现在 `[TAG]`            |
+| `BufferSize`  | 4096    | 异步缓冲大小，满时丢弃兜底            |
+| `Compress`    | `false` | 轮转后是否 gzip 压缩旧文件            |
+| `MaxBackups`  | 5       | 保留的压缩备份数量                    |
 
 ## 模块子日志器
 
