@@ -121,9 +121,6 @@ func New(cfg Config) (*Log, error) {
 	if cfg.MaxSize <= 0 {
 		cfg.MaxSize = 50 << 20 // 50MB
 	}
-	if cfg.StdoutLevel == 0 {
-		cfg.StdoutLevel = LevelInfo
-	}
 	if !cfg.Color {
 		cfg.Color = true
 	}
@@ -491,13 +488,13 @@ func (l *Log) writeConsole(e *logEntry) {
 	var bg int
 	switch e.Level {
 	case LevelDebug:
-		bg = cBgBlue
+		bg = cBlue
 	case LevelInfo:
-		bg = cBgGreen
+		bg = cGreen
 	case LevelWarn:
-		bg = cBgOrange
+		bg = cOrange
 	case LevelError:
-		bg = cBgRed
+		bg = cRed
 	}
 	appendAnsi(b, bg, cWhite)
 	b.WriteByte('[')
@@ -749,14 +746,10 @@ func appendAnsi(b *bytes.Buffer, bg, fg int) {
 
 // 预定义的 ANSI 256 色盘色号。
 const (
-	cGreen    = 34  // 绿底 INFO
-	cBlue     = 27  // 蓝底 DEBUG
-	cOrange   = 214 // 橙底 WARN
-	cRed      = 160 // 红底 ERROR
-	cGray     = 245 // 灰色，时间戳
-	cWhite    = 255 // 白字
-	cBgGreen  = 34
-	cBgBlue   = 27
-	cBgOrange = 214
-	cBgRed    = 160
+	cGreen  = 34  // 绿底 INFO
+	cBlue   = 27  // 蓝底 DEBUG
+	cOrange = 214 // 橙底 WARN
+	cRed    = 160 // 红底 ERROR
+	cGray   = 245 // 灰色，时间戳
+	cWhite  = 255 // 白字
 )
