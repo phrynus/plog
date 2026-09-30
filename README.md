@@ -1,6 +1,6 @@
 # plog
 
-简单轻量的 Go 日志库。支持文件输出、控制台彩色输出、按大小轮转与 gzip 压缩、异步写入，并内置 Gin / Fiber / GORM 集成。
+简单轻量的 Go 日志库。支持文件输出、控制台彩色输出、按大小轮转与 gzip 压缩、异步写入，并提供 Gin / Fiber / GORM 可选适配子包。
 
 ## 特性
 
@@ -10,6 +10,7 @@
 - 控制台 ANSI 彩色输出
 - `Sub()` 子日志器，按 tag 区分模块
 - 包级快捷函数，零配置即用
+- **核心包零第三方依赖**，Web 框架适配器独立成子包按需引入（不引入则不占体积）
 
 ## 安装
 
@@ -87,34 +88,62 @@ l.Error("something went wrong")
 ## 模块子日志器
 
 ```go
+// 子日志器与父日志器写同一文件、共享异步通道，只有 tag 不同。
 db := l.Sub("DB")
 db.Debugf("query: %s", sql)
 ```
 
+子日志器默认继承父日志器的全部配置，可用 `SubOption` 覆盖：
+
+```go
+// 例如让这个子日志器不记录 file:line
+trace := l.Sub("TRACE", plog.WithFileLine(false))
+```
+
 ## 框架集成
 
-**Gin**
+Gin / Fiber / GORM 适配器都是**可选子包**：只有真正 `import` 时才会把对应框架编译进二进制。
+只写文件日志的项目不会再被拖入 Web 框架全家桶。
+
+**Gin**（`github.com/phrynus/plog/ginlog`）
 
 ```go
+import "github.com/phrynus/plog/ginlog"
+
 r := gin.New()
-r.Use(plog.GinLog(), plog.GinRecovery())
+r.Use(ginlog.Log(myLog), ginlog.Recovery(myLog))
+
+// 使用包级默认日志器：
+r.Use(ginlog.LogDefault(), ginlog.RecoveryDefault())
 ```
 
-**Fiber**
+**Fiber**（`github.com/phrynus/plog/fiberlog`）
 
 ```go
+import "github.com/phrynus/plog/fiberlog"
+
 app := fiber.New()
-app.Use(plog.FiberLog(), plog.FiberRecovery())
+app.Use(fiberlog.Log(myLog), fiberlog.Recovery(myLog))
+
+// 使用包级默认日志器：
+app.Use(fiberlog.LogDefault(), fiberlog.RecoveryDefault())
 ```
 
-**GORM**
+**GORM**（`github.com/phrynus/plog/gormlog`）
 
 ```go
+import "github.com/phrynus/plog/gormlog"
+
 db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{
-	Logger: myLog.GormLog(),
+	Logger: gormlog.New(myLog), // 或 gormlog.NewDefault()
 })
 ```
 
-## License
+`gormlog.Logger` 的字段可直接调整：
 
-MIT
+```go
+lg := gormlog.New(myLog)
+lg.SlowThreshold = 500 * time.Millisecond
+lg.IgnoreRecordNotFoundError = false
+db, _ := gorm.Open(dialector, &gorm.Config{Logger: lg})
+```

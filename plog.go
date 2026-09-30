@@ -1,3 +1,14 @@
+// Package plog 是一个零第三方依赖的 Go 日志库：文件输出、控制台彩色输出、
+// 按大小轮转与 gzip 压缩、异步写入。
+//
+// 本包（核心）不 import 任何第三方包，因此只使用核心功能时不会把 Web 框架
+// 及其依赖链带进二进制。Gin / Fiber / GORM 适配器位于 ginlog、fiberlog、
+// gormlog 子包，需要时按需导入：
+//
+//	import (
+//		"github.com/phrynus/plog"
+//		"github.com/phrynus/plog/ginlog"
+//	)
 package plog
 
 import (
@@ -223,21 +234,38 @@ func (l *Log) Close() error {
 	return l.file.Close()
 }
 
+// SubOption 用于在创建子日志器时覆盖从父日志器继承的配置。
+type SubOption func(*Config)
+
+// WithFileLine 设置子日志器是否记录调用位置（file:line）。
+func WithFileLine(v bool) SubOption {
+	return func(cfg *Config) { cfg.FileLine = v }
+}
+
 // Sub 创建一个共享底层资源但使用不同 tag 的子日志器。
 // 子日志器与父日志器写入同一文件、共享同一异步通道，仅 tag 不同。
 // 子日志器不需要（也不应该）调用 Close，关闭父日志器即可。
-func (l *Log) Sub(tag string) *Log {
+//
+// 可选传入 SubOption 覆盖继承的配置，例如：
+//
+//	sub := l.Sub("GORM", WithFileLine(false))
+func (l *Log) Sub(tag string, opts ...SubOption) *Log {
+	cfg := Config{
+		Filename:    l.cfg.Filename,
+		MaxSize:     l.cfg.MaxSize,
+		MinLevel:    l.cfg.MinLevel,
+		StdoutLevel: l.cfg.StdoutLevel,
+		Color:       l.cfg.Color,
+		FileLine:    l.cfg.FileLine,
+		Tag:         tag,
+		MaxBackups:  l.cfg.MaxBackups,
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	return &Log{
-		cfg: Config{
-			Filename:    l.cfg.Filename,
-			MaxSize:     l.cfg.MaxSize,
-			MinLevel:    l.cfg.MinLevel,
-			StdoutLevel: l.cfg.StdoutLevel,
-			Color:       l.cfg.Color,
-			FileLine:    l.cfg.FileLine,
-			Tag:         tag,
-			MaxBackups:  l.cfg.MaxBackups,
-		},
+		cfg:  cfg,
 		file: l.file,
 		ch:   l.ch,
 		done: l.done,
@@ -245,6 +273,9 @@ func (l *Log) Sub(tag string) *Log {
 		sub:  true,
 	}
 }
+
+// Config 返回日志器当前配置的副本。
+func (l *Log) Config() Config { return l.cfg }
 
 // ──────────────────── 包级默认日志器（零配置直接用） ────────────────────
 
@@ -275,6 +306,10 @@ func stdInit() *Log {
 	})
 	return std
 }
+
+// Default 返回包级默认日志器，首次调用时按默认配置懒加载初始化。
+// 需要把 plog 交给框架适配器（如 ginlog / gormlog）时使用。
+func Default() *Log { return stdInit() }
 
 func SetDefault(cfg Config) {
 	stdOnce.Do(func() {
@@ -318,8 +353,8 @@ func Close() {
 }
 
 // Sub 创建一个共享底层资源但使用不同 tag 的子日志器。
-func Sub(tag string) *Log {
-	return stdInit().Sub(tag)
+func Sub(tag string, opts ...SubOption) *Log {
+	return stdInit().Sub(tag, opts...)
 }
 
 // ──────────────────────────── 异步 goroutine ────────────────────────────
@@ -692,17 +727,18 @@ func (l *Log) log(Level Level, format string, args ...any) {
 	l.sendEntry(entry)
 }
 
-// logEntryNames 是 plog 包内所有日志入口的名称（方法或包级函数），
-// 用于在定位真实调用方时跳过内部帧（兼容编译器内联导致的栈帧偏移）。
-var logEntryNames = map[string]bool{
-	"Debug": true, "Debugf": true, "Info": true, "Infof": true,
-	"Warn": true, "Warnf": true, "Error": true, "Errorf": true,
-	"Sub": true, "Close": true, "Flush": true,
-	"SetDefault": true, "stdInit": true,
+// ModulePath 是本库的模块路径，用于识别并跳过库内部栈帧。
+const ModulePath = "github.com/phrynus/plog"
+
+// inThisModule 判断函数完整名是否属于本库（含核心包与各框架适配子包）。
+// 形如 github.com/phrynus/plog.(*Log).log 或 github.com/phrynus/plog/ginlog.Log.func1。
+func inThisModule(fn string) bool {
+	return strings.HasPrefix(fn, ModulePath+".") || strings.HasPrefix(fn, ModulePath+"/")
 }
 
 // callerLocation 返回真实调用方的文件名（不含路径）与行号。
-// 跳过本包内部的日志入口，避免包装方法被内联后 runtime.Caller 深度偏移。
+// 跳过本库内部的所有栈帧（日志入口、框架适配器等），
+// 避免包装方法被内联后 runtime.Caller 深度偏移，也避免日志里出现库自身的位置。
 func callerLocation() (string, int) {
 	var pcs [16]uintptr
 	n := runtime.Callers(2, pcs[:])
@@ -712,12 +748,7 @@ func callerLocation() (string, int) {
 		if !more {
 			return "", 0
 		}
-		// 跳过 *Log 的方法（log / Debug / Info / ...）
-		if strings.Contains(fr.Function, ".(*Log).") {
-			continue
-		}
-		// 跳过包级快捷函数
-		if i := strings.LastIndexByte(fr.Function, '.'); i >= 0 && logEntryNames[fr.Function[i+1:]] {
+		if inThisModule(fr.Function) {
 			continue
 		}
 		return filepath.Base(fr.File), fr.Line
