@@ -85,6 +85,22 @@ l.Error("something went wrong")
 | `Compress`    | `false` | 轮转后是否 gzip 压缩旧文件            |
 | `MaxBackups`  | 5       | 保留的压缩备份数量                    |
 
+## 级别名称转换
+
+`plog.Int` 把级别名称转成 `Level`，大小写不敏感（`debug` / `Debug` / `DEBUG` 等价），
+名称前后空白会被忽略，无法识别时返回 `LevelNone`（`4`），即关闭输出。
+常用于从配置或环境变量读取级别：
+
+```go
+// 无法识别的名称返回 LevelNone，不会输出任何日志
+cfg.MinLevel = plog.Int(os.Getenv("LOG_LEVEL"))
+
+plog.Int("debug") // LevelDebug
+plog.Int("Warn")  // LevelWarn
+plog.Int("NONE")  // LevelNone
+plog.Int("???")   // LevelNone
+```
+
 ## 模块子日志器
 
 ```go

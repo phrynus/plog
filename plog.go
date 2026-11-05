@@ -48,6 +48,28 @@ func (lvl Level) String() string {
 	return LevelNames[lvl]
 }
 
+// Int 将级别名称转换为对应的 Level，大小写不敏感：
+//
+//	Int("debug") // LevelDebug
+//	Int("Debug") // LevelDebug
+//	Int("DEBUG") // LevelDebug
+//	Int("Warn")  // LevelWarn
+//	Int("none")  // LevelNone
+//
+// 名称前后的空白会被忽略；无法识别的名称返回 LevelNone，即关闭输出。
+// 典型用法：从配置项 / 环境变量中读取级别，如
+//
+//	cfg.MinLevel = plog.Int(os.Getenv("LOG_LEVEL"))
+func Int(name string) Level {
+	name = strings.TrimSpace(name)
+	for i, n := range LevelNames {
+		if strings.EqualFold(name, n) {
+			return Level(i)
+		}
+	}
+	return LevelNone
+}
+
 // Config 是日志器的配置，所有字段均可选（Filename 除外）。
 type Config struct {
 	// Filename 日志文件路径（必填）。
